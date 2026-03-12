@@ -25,6 +25,11 @@ public class SubSessionManager extends SessionManagerCore {
     public SubSessionManager(String id, SessionManager parent, StorageManager storageManager, NotificationManager notificationManager, Logger logger) {
         super(storageManager, notificationManager, logger.prefixed("Sub-Session " + id));
         this.parent = parent;
+
+        // Sub-sessions need their own connection/xuid context for JOIN_SESSION payload updates.
+        // We seed with parent public session settings, but keep the same shared Xbox session id.
+        this.sessionInfo = new ExpandedSessionInfo("", "", parent.sessionInfo().copy());
+        this.sessionInfo.setSessionId(parent.sessionInfo().getSessionId());
     }
 
     @Override
@@ -57,6 +62,13 @@ public class SubSessionManager extends SessionManagerCore {
 
     @Override
     protected void updateSession() throws SessionUpdateException {
-        super.updateSessionInternal(Constants.JOIN_SESSION.formatted(parent.sessionInfo().getHandleId()), new JoinSessionRequest(parent.sessionInfo()));
+        if (this.sessionInfo == null || this.sessionInfo.getConnectionId() == null || this.sessionInfo.getConnectionId().isBlank()) {
+            throw new SessionUpdateException("Sub-session is missing connection info and cannot join the parent session");
+        }
+
+        super.updateSessionInternal(
+            Constants.JOIN_SESSION.formatted(parent.sessionInfo().getHandleId()),
+            new JoinSessionRequest(this.sessionInfo)
+        );
     }
 }
