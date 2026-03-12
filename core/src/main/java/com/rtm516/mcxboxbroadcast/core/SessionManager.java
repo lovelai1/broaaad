@@ -4,6 +4,7 @@ import com.google.gson.JsonParseException;
 import com.rtm516.mcxboxbroadcast.core.configs.CoreConfig;
 import com.rtm516.mcxboxbroadcast.core.exceptions.SessionCreationException;
 import com.rtm516.mcxboxbroadcast.core.exceptions.SessionUpdateException;
+import com.rtm516.mcxboxbroadcast.core.models.session.FollowerResponse;
 import com.rtm516.mcxboxbroadcast.core.models.session.CreateSessionRequest;
 import com.rtm516.mcxboxbroadcast.core.models.session.CreateSessionResponse;
 import com.rtm516.mcxboxbroadcast.core.notifications.NotificationManager;
@@ -18,9 +19,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simple manager to authenticate and create sessions on Xbox
@@ -31,6 +34,10 @@ public class SessionManager extends SessionManagerCore {
 
     private CoreConfig.FriendSyncConfig friendSyncConfig;
     private Runnable restartCallback;
+    private volatile boolean socialActionsReady;
+
+    private List<InviteTarget> inviteQueue = new ArrayList<>();
+    private int inviteQueueIndex = 0;
 
     /**
      * Create an instance of SessionManager
@@ -43,6 +50,7 @@ public class SessionManager extends SessionManagerCore {
         super(storageManager, notificationManager, logger.prefixed("Primary Session"));
         this.scheduledThreadPool = Executors.newScheduledThreadPool(5, new NamedThreadFactory("MCXboxBroadcast Thread"));
         this.subSessionManagers = new HashMap<>();
+        this.socialActionsReady = false;
     }
 
     @Override
@@ -79,7 +87,7 @@ public class SessionManager extends SessionManagerCore {
         super.init();
 
         this.friendSyncConfig = friendSyncConfig;
-        friendManager().init(this.friendSyncConfig);
+        this.socialActionsReady = false;
 
         // Load sub-sessions from cache
         List<String> subSessions = new ArrayList<>();
@@ -90,9 +98,11 @@ public class SessionManager extends SessionManagerCore {
             }
         } catch (IOException ignored) { }
 
-        // Create the sub-sessions in a new thread so we don't block the main thread
+        // Create account friend/invite logic after all sessions are loaded
         List<String> finalSubSessions = subSessions;
         scheduledThreadPool.execute(() -> {
+            friendManager().init(this.friendSyncConfig);
+
             // Create the sub-session manager for each sub-session
             for (String subSession : finalSubSessions) {
                 try {
@@ -105,6 +115,10 @@ public class SessionManager extends SessionManagerCore {
                     // TODO Retry creation after 30s or so
                 }
             }
+
+            socialActionsReady = true;
+            startAutoInviteLoop();
+            logger.info("All accounts initialized, social actions are now enabled");
         });
     }
 
@@ -112,6 +126,11 @@ public class SessionManager extends SessionManagerCore {
     protected boolean handleFriendship() {
         // Don't do anything as we are the main session
         return false;
+    }
+
+    @Override
+    public boolean socialActionsReady() {
+        return socialActionsReady;
     }
 
     /**
@@ -260,6 +279,7 @@ public class SessionManager extends SessionManagerCore {
         messages.add("Primary Session:");
         messages.add(" - Gamertag: " + getXboxToken().gamertag());
         messages.add("   Following: " + socialSummary().targetFollowingCount() + "/" + Constants.MAX_FRIENDS);
+        appendPresenceSummary(messages, friendManager(), "   ");
 
         if (!subSessionManagers.isEmpty()) {
             messages.add("Sub-sessions: (" + subSessionManagers.size() + ")");
@@ -267,6 +287,7 @@ public class SessionManager extends SessionManagerCore {
                 messages.add(" - ID: " + subSession.getKey());
                 messages.add("   Gamertag: " + subSession.getValue().getXboxToken().gamertag());
                 messages.add("   Following: " + subSession.getValue().socialSummary().targetFollowingCount() + "/" + Constants.MAX_FRIENDS);
+                appendPresenceSummary(messages, subSession.getValue().friendManager(), "   ");
             }
         } else {
             messages.add("No sub-sessions");
@@ -275,6 +296,92 @@ public class SessionManager extends SessionManagerCore {
         for (String message : messages) {
             coreLogger.info(message);
         }
+    }
+
+
+    private void appendPresenceSummary(List<String> messages, FriendManager friendManager, String indent) {
+        List<FollowerResponse.Person> sorted = friendManager.sortedByOnline(true);
+        List<FollowerResponse.Person> online = sorted.stream().filter(friendManager::isOnline).collect(java.util.stream.Collectors.toList());
+
+        messages.add(indent + "Friends online: " + online.size() + "/" + sorted.size());
+        if (online.isEmpty()) {
+            messages.add(indent + "Online list: none");
+            return;
+        }
+
+        StringBuilder onlineList = new StringBuilder();
+        int limit = Math.min(20, online.size());
+        for (int i = 0; i < limit; i++) {
+            FollowerResponse.Person person = online.get(i);
+            if (i > 0) {
+                onlineList.append(", ");
+            }
+            onlineList.append(friendManager.displayName(person));
+        }
+
+        if (online.size() > limit) {
+            onlineList.append(" ... (+").append(online.size() - limit).append(")");
+        }
+
+        messages.add(indent + "Online list: " + onlineList);
+    }
+
+    private void startAutoInviteLoop() {
+        if (!friendSyncConfig.autoInvite().enabled()) {
+            return;
+        }
+
+        scheduledThreadPool.scheduleWithFixedDelay(this::processAutoInvite, friendSyncConfig.autoInvite().interval(), friendSyncConfig.autoInvite().interval(), TimeUnit.SECONDS);
+    }
+
+    private void processAutoInvite() {
+        if (!socialActionsReady) {
+            return;
+        }
+
+        if (inviteQueue.isEmpty() || inviteQueueIndex >= inviteQueue.size()) {
+            refreshInviteQueue();
+            if (inviteQueue.isEmpty()) {
+                return;
+            }
+        }
+
+        InviteTarget target = inviteQueue.get(inviteQueueIndex++);
+        target.inviter().sendSessionInvite(target.xuid(), target.gamertag());
+    }
+
+    private void refreshInviteQueue() {
+        Map<String, InviteTarget> queueTargets = new LinkedHashMap<>();
+
+        appendMutualInviteTargets(queueTargets, this);
+        for (SubSessionManager subSessionManager : subSessionManagers.values()) {
+            appendMutualInviteTargets(queueTargets, subSessionManager);
+        }
+
+        inviteQueue = new ArrayList<>(queueTargets.values());
+        inviteQueueIndex = 0;
+        logger.debug("Auto-invite list refreshed with " + inviteQueue.size() + " players");
+    }
+
+    private void appendMutualInviteTargets(Map<String, InviteTarget> queueTargets, SessionManagerCore inviter) {
+        boolean onlyOnline = friendSyncConfig.autoInvite().onlyOnline();
+
+        for (FollowerResponse.Person person : inviter.friendManager().mutualFriends(true)) {
+            if (onlyOnline && !inviter.friendManager().isOnline(person)) {
+                continue;
+            }
+
+            String gamertag = person.gamertag != null && !person.gamertag.isBlank() ? person.gamertag : person.displayName;
+            if (gamertag == null || gamertag.isBlank()) {
+                gamertag = "Unknown";
+            }
+
+            queueTargets.putIfAbsent(person.xuid, new InviteTarget(person.xuid, gamertag, inviter));
+        }
+    }
+
+
+    private record InviteTarget(String xuid, String gamertag, SessionManagerCore inviter) {
     }
 
     /**

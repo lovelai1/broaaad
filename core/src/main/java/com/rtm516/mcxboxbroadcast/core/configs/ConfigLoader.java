@@ -35,6 +35,9 @@ public class ConfigLoader {
             .addAction(path("friend-sync", "expire-check"), renameAndMove("friend-sync", "expiry", "check"))
 
             .build())
+        .addVersion(3, ConfigurationTransformation.builder().build())
+        .addVersion(4, ConfigurationTransformation.builder().build())
+        .addVersion(5, ConfigurationTransformation.builder().build())
         .build();
 
     public static CoreConfig loadConfig(File configFile, String platformName) throws ConfigurateException {
