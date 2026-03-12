@@ -18,9 +18,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simple manager to authenticate and create sessions on Xbox
@@ -31,6 +33,10 @@ public class SessionManager extends SessionManagerCore {
 
     private CoreConfig.FriendSyncConfig friendSyncConfig;
     private Runnable restartCallback;
+    private volatile boolean socialActionsReady;
+
+    private List<InviteTarget> inviteQueue = new ArrayList<>();
+    private int inviteQueueIndex = 0;
 
     /**
      * Create an instance of SessionManager
@@ -43,6 +49,7 @@ public class SessionManager extends SessionManagerCore {
         super(storageManager, notificationManager, logger.prefixed("Primary Session"));
         this.scheduledThreadPool = Executors.newScheduledThreadPool(5, new NamedThreadFactory("MCXboxBroadcast Thread"));
         this.subSessionManagers = new HashMap<>();
+        this.socialActionsReady = false;
     }
 
     @Override
@@ -79,7 +86,7 @@ public class SessionManager extends SessionManagerCore {
         super.init();
 
         this.friendSyncConfig = friendSyncConfig;
-        friendManager().init(this.friendSyncConfig);
+        this.socialActionsReady = false;
 
         // Load sub-sessions from cache
         List<String> subSessions = new ArrayList<>();
@@ -90,9 +97,11 @@ public class SessionManager extends SessionManagerCore {
             }
         } catch (IOException ignored) { }
 
-        // Create the sub-sessions in a new thread so we don't block the main thread
+        // Create account friend/invite logic after all sessions are loaded
         List<String> finalSubSessions = subSessions;
         scheduledThreadPool.execute(() -> {
+            friendManager().init(this.friendSyncConfig);
+
             // Create the sub-session manager for each sub-session
             for (String subSession : finalSubSessions) {
                 try {
@@ -105,6 +114,10 @@ public class SessionManager extends SessionManagerCore {
                     // TODO Retry creation after 30s or so
                 }
             }
+
+            socialActionsReady = true;
+            startAutoInviteLoop();
+            logger.info("All accounts initialized, social actions are now enabled");
         });
     }
 
@@ -112,6 +125,11 @@ public class SessionManager extends SessionManagerCore {
     protected boolean handleFriendship() {
         // Don't do anything as we are the main session
         return false;
+    }
+
+    @Override
+    public boolean socialActionsReady() {
+        return socialActionsReady;
     }
 
     /**
@@ -275,6 +293,53 @@ public class SessionManager extends SessionManagerCore {
         for (String message : messages) {
             coreLogger.info(message);
         }
+    }
+
+    private void startAutoInviteLoop() {
+        if (!friendSyncConfig.autoInvite().enabled()) {
+            return;
+        }
+
+        scheduledThreadPool.scheduleWithFixedDelay(this::processAutoInvite, friendSyncConfig.autoInvite().interval(), friendSyncConfig.autoInvite().interval(), TimeUnit.SECONDS);
+    }
+
+    private void processAutoInvite() {
+        if (!socialActionsReady) {
+            return;
+        }
+
+        if (inviteQueue.isEmpty() || inviteQueueIndex >= inviteQueue.size()) {
+            refreshInviteQueue();
+            if (inviteQueue.isEmpty()) {
+                return;
+            }
+        }
+
+        InviteTarget target = inviteQueue.get(inviteQueueIndex++);
+        target.inviter().sendSessionInvite(target.xuid());
+    }
+
+    private void refreshInviteQueue() {
+        Map<String, InviteTarget> queueTargets = new LinkedHashMap<>();
+
+        appendMutualInviteTargets(queueTargets, this);
+        for (SubSessionManager subSessionManager : subSessionManagers.values()) {
+            appendMutualInviteTargets(queueTargets, subSessionManager);
+        }
+
+        inviteQueue = new ArrayList<>(queueTargets.values());
+        inviteQueueIndex = 0;
+        logger.debug("Auto-invite list refreshed with " + inviteQueue.size() + " players");
+    }
+
+    private void appendMutualInviteTargets(Map<String, InviteTarget> queueTargets, SessionManagerCore inviter) {
+        for (String xuid : inviter.friendManager().mutualFriendXuids(true)) {
+            queueTargets.putIfAbsent(xuid, new InviteTarget(xuid, inviter));
+        }
+    }
+
+
+    private record InviteTarget(String xuid, SessionManagerCore inviter) {
     }
 
     /**

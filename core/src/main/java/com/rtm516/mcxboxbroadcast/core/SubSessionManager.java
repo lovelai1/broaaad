@@ -51,6 +51,11 @@ public class SubSessionManager extends SessionManagerCore {
     }
 
     @Override
+    public boolean socialActionsReady() {
+        return parent.socialActionsReady();
+    }
+
+    @Override
     protected void updateSession() throws SessionUpdateException {
         super.updateSessionInternal(Constants.JOIN_SESSION.formatted(parent.sessionInfo().getHandleId()), new JoinSessionRequest(parent.sessionInfo()));
     }

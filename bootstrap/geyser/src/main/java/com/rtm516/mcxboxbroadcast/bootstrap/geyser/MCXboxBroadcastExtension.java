@@ -191,8 +191,8 @@ public class MCXboxBroadcastExtension implements Extension {
             sessionInfo = new SessionInfo();
             sessionInfo.setHostName(this.geyserApi().bedrockListener().secondaryMotd());
             sessionInfo.setWorldName(this.geyserApi().bedrockListener().primaryMotd());
-            sessionInfo.setPlayers(this.geyserApi().onlineConnections().size());
-            sessionInfo.setMaxPlayers(GeyserImpl.getInstance().config().motd().maxPlayers()); // TODO Find API equivalent
+            sessionInfo.setPlayers(resolvePlayers(this.geyserApi().onlineConnections().size()));
+            sessionInfo.setMaxPlayers(resolveMaxPlayers(GeyserImpl.getInstance().config().motd().maxPlayers())); // TODO Find API equivalent
 
             // Fallback to the gamertag if the host name is empty
             if (sessionInfo.getHostName().isEmpty()) {
@@ -221,8 +221,8 @@ public class MCXboxBroadcastExtension implements Extension {
         sessionInfo.setHostName(event.secondaryMotd());
         sessionInfo.setWorldName(event.primaryMotd());
         
-        sessionInfo.setPlayers(event.playerCount());
-        sessionInfo.setMaxPlayers(event.maxPlayerCount());
+        sessionInfo.setPlayers(resolvePlayers(event.playerCount()));
+        sessionInfo.setMaxPlayers(resolveMaxPlayers(event.maxPlayerCount()));
 
         // Fallback to the gamertag if the host name is empty
         if (sessionInfo.getHostName().isEmpty()) {
@@ -230,6 +230,16 @@ public class MCXboxBroadcastExtension implements Extension {
         }
     }
 
+
+    private int resolvePlayers(int livePlayers) {
+        int forced = config.session().forcedPlayers();
+        return forced >= 0 ? forced : livePlayers;
+    }
+
+    private int resolveMaxPlayers(int liveMaxPlayers) {
+        int forced = config.session().forcedMaxPlayers();
+        return forced >= 0 ? forced : liveMaxPlayers;
+    }
 
     private void createSession() {
         // Create the Xbox session

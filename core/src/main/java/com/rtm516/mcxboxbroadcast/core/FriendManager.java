@@ -133,6 +133,11 @@ public class FriendManager {
      * @param gamertag The gamertag of the friend to add
      */
     public void add(String xuid, String gamertag) {
+        if (!sessionManager.socialActionsReady()) {
+            logger.debug("Skipping add request while accounts are still loading");
+            return;
+        }
+
         // Remove the user from the remove list (if they are on it)
         toRemove.remove(xuid);
 
@@ -186,6 +191,11 @@ public class FriendManager {
      * @param gamertag The gamertag of the friend to remove
      */
     public void remove(String xuid, String gamertag) {
+        if (!sessionManager.socialActionsReady()) {
+            logger.debug("Skipping remove request while accounts are still loading");
+            return;
+        }
+
         // Try and get the gamertag from the cache if it wasn't provided
         if (gamertag == null) {
             Optional<FollowerResponse.Person> foundFriend = lastFriendCache.stream().filter(person -> person.xuid.equals(xuid)).findFirst();
@@ -287,6 +297,9 @@ public class FriendManager {
         this.initialInvite = friendSyncConfig.initialInvite();
         if (friendSyncConfig.autoFollow() || friendSyncConfig.autoUnfollow()) {
             sessionManager.scheduledThread().scheduleWithFixedDelay(() -> {
+                if (!sessionManager.socialActionsReady()) {
+                    return;
+                }
                 try {
                     for (FollowerResponse.Person person : get()) {
                         // Make sure we are not targeting a subaccount (eg: split screen)
@@ -335,6 +348,10 @@ public class FriendManager {
      * Calls the internal process to handle adding/removing friends if it isn't already running
      */
     private void callInternalProcess() {
+        if (!sessionManager.socialActionsReady()) {
+            return;
+        }
+
         // If we are already running then don't run again
         if (internalScheduledFuture != null && !internalScheduledFuture.isDone()) {
             return;
@@ -534,7 +551,7 @@ public class FriendManager {
     }
 
     public void acceptPendingFriendRequests() {
-        if (!shouldAcceptPendingRequests) {
+        if (!shouldAcceptPendingRequests || !sessionManager.socialActionsReady()) {
             return;
         }
 
@@ -583,12 +600,35 @@ public class FriendManager {
         }
     }
 
+
+    public List<String> mutualFriendXuids(boolean refresh) {
+        List<FollowerResponse.Person> people = refresh ? refreshFriendCache() : lastFriendCache();
+        return people.stream()
+            .filter(person -> person.isFollowingCaller && person.isFollowedByCaller)
+            .map(person -> person.xuid)
+            .distinct()
+            .collect(Collectors.toList());
+    }
+
+    public List<FollowerResponse.Person> refreshFriendCache() {
+        try {
+            return get();
+        } catch (XboxFriendsException e) {
+            logger.error("Failed to refresh friends from Xbox Live", e);
+            return lastFriendCache();
+        }
+    }
+
     /**
      * Send an invite to a given xuid for the current game session
      *
      * @param xuid The XUID of the user to invite
      */
     public void sendInvite(String xuid) {
+        if (!sessionManager.socialActionsReady()) {
+            return;
+        }
+
         // Only invite if enabled
         if (!initialInvite) {
             return;
@@ -615,7 +655,12 @@ public class FriendManager {
                 .build();
 
             HttpResponse<String> inviteResponse = httpClient.send(sendInvite, HttpResponse.BodyHandlers.ofString());
-            logger.debug(inviteResponse.body());
+            if (inviteResponse.statusCode() == 200 || inviteResponse.statusCode() == 201) {
+                logger.info("Invite sent from " + sessionManager.gamertag() + " (" + sessionManager.userXUID() + ") to " + xuid);
+            } else {
+                logger.warn("Invite failed from " + sessionManager.gamertag() + " (" + sessionManager.userXUID() + ") to " + xuid + ": " + inviteResponse.statusCode());
+                logger.debug(inviteResponse.body());
+            }
         } catch (IOException | InterruptedException e) {
             logger.error("Failed to send invite to " + xuid + ": " + e.getMessage());
         }

@@ -23,6 +23,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -540,12 +541,68 @@ public abstract class SessionManagerCore {
     }
 
     /**
+     * Get the current account gamertag
+     *
+     * @return The account gamertag
+     */
+    public String gamertag() {
+        return getXboxToken().gamertag();
+    }
+
+    /**
      * Get the current MC token for the session
      *
      * @return The current MC token
      */
     public String getMCTokenHeader() {
         return mcToken;
+    }
+
+    /**
+     * Send an invite to the current session using this account
+     *
+     * @param xuid The XUID to invite
+     */
+    public void sendSessionInvite(String xuid) {
+        try {
+            CreateHandleRequest createHandleContent = new CreateHandleRequest(
+                1,
+                "invite",
+                new SessionRef(
+                    Constants.SERVICE_CONFIG_ID,
+                    Constants.TEMPLATE_NAME,
+                    getSessionId()
+                ),
+                xuid,
+                Map.of("titleId", Constants.TITLE_ID)
+            );
+
+            HttpRequest sendInvite = HttpRequest.newBuilder()
+                .uri(Constants.CREATE_HANDLE)
+                .header("Authorization", getTokenHeader())
+                .header("x-xbl-contract-version", "107")
+                .POST(HttpRequest.BodyPublishers.ofString(Constants.GSON.toJson(createHandleContent)))
+                .build();
+
+            HttpResponse<String> inviteResponse = httpClient.send(sendInvite, HttpResponse.BodyHandlers.ofString());
+            if (inviteResponse.statusCode() == 200 || inviteResponse.statusCode() == 201) {
+                logger.info("Invite sent from " + gamertag() + " (" + userXUID() + ") to " + xuid);
+            } else {
+                logger.warn("Invite failed from " + gamertag() + " (" + userXUID() + ") to " + xuid + ": " + inviteResponse.statusCode());
+                logger.debug(inviteResponse.body());
+            }
+        } catch (IOException | InterruptedException e) {
+            logger.error("Failed to send invite to " + xuid, e);
+        }
+    }
+
+    /**
+     * Whether social actions (friend add/remove/invites) can run for this session
+     *
+     * @return true if social actions are currently allowed
+     */
+    public boolean socialActionsReady() {
+        return true;
     }
 
     /**
