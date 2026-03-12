@@ -189,10 +189,10 @@ public class MCXboxBroadcastExtension implements Extension {
 
             // Create the session information based on the Geyser config
             sessionInfo = new SessionInfo();
-            sessionInfo.setHostName(this.geyserApi().bedrockListener().secondaryMotd());
-            sessionInfo.setWorldName(this.geyserApi().bedrockListener().primaryMotd());
-            sessionInfo.setPlayers(this.geyserApi().onlineConnections().size());
-            sessionInfo.setMaxPlayers(GeyserImpl.getInstance().config().motd().maxPlayers()); // TODO Find API equivalent
+            sessionInfo.setHostName(resolveHostName(this.geyserApi().bedrockListener().secondaryMotd()));
+            sessionInfo.setWorldName(resolveWorldName(this.geyserApi().bedrockListener().primaryMotd()));
+            sessionInfo.setPlayers(resolvePlayers(this.geyserApi().onlineConnections().size()));
+            sessionInfo.setMaxPlayers(resolveMaxPlayers(GeyserImpl.getInstance().config().motd().maxPlayers())); // TODO Find API equivalent
 
             // Fallback to the gamertag if the host name is empty
             if (sessionInfo.getHostName().isEmpty()) {
@@ -218,11 +218,11 @@ public class MCXboxBroadcastExtension implements Extension {
         }
 
         // Allows support for motd and player count passthrough
-        sessionInfo.setHostName(event.secondaryMotd());
-        sessionInfo.setWorldName(event.primaryMotd());
+        sessionInfo.setHostName(resolveHostName(event.secondaryMotd()));
+        sessionInfo.setWorldName(resolveWorldName(event.primaryMotd()));
         
-        sessionInfo.setPlayers(event.playerCount());
-        sessionInfo.setMaxPlayers(event.maxPlayerCount());
+        sessionInfo.setPlayers(resolvePlayers(event.playerCount()));
+        sessionInfo.setMaxPlayers(resolveMaxPlayers(event.maxPlayerCount()));
 
         // Fallback to the gamertag if the host name is empty
         if (sessionInfo.getHostName().isEmpty()) {
@@ -230,6 +230,27 @@ public class MCXboxBroadcastExtension implements Extension {
         }
     }
 
+
+
+    private String resolveHostName(String liveHostName) {
+        String forced = config.session().forcedHostName();
+        return forced == null || forced.isBlank() ? liveHostName : forced;
+    }
+
+    private String resolveWorldName(String liveWorldName) {
+        String forced = config.session().forcedWorldName();
+        return forced == null || forced.isBlank() ? liveWorldName : forced;
+    }
+
+    private int resolvePlayers(int livePlayers) {
+        int forced = config.session().forcedPlayers();
+        return forced >= 0 ? forced : livePlayers;
+    }
+
+    private int resolveMaxPlayers(int liveMaxPlayers) {
+        int forced = config.session().forcedMaxPlayers();
+        return forced >= 0 ? forced : liveMaxPlayers;
+    }
 
     private void createSession() {
         // Create the Xbox session

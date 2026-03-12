@@ -59,6 +59,25 @@ public interface CoreConfig {
         @NumericRange(from = 20, to = Integer.MAX_VALUE)
         int updateInterval();
 
+
+
+
+        @Comment("Force advertised host name, leave empty to use live values")
+        @DefaultString("")
+        String forcedHostName();
+
+        @Comment("Force advertised world name, leave empty to use live values")
+        @DefaultString("")
+        String forcedWorldName();
+
+        @Comment("Force advertised online player count, set to -1 to use live values")
+        @DefaultNumeric(-1)
+        int forcedPlayers();
+
+        @Comment("Force advertised max player slots, set to -1 to use live values")
+        @DefaultNumeric(-1)
+        int forcedMaxPlayers();
+
         @Comment("Should we query the bedrock server to sync the session information")
         @ExcludePlatform(platforms = {"Extension"})
         @DefaultBoolean(true)
@@ -129,6 +148,28 @@ public interface CoreConfig {
         @Comment("Should we automatically send an invite when a friend is added")
         @DefaultBoolean(true)
         boolean initialInvite();
+
+
+
+        @Comment("Automated invite settings")
+        AutoInviteConfig autoInvite();
+
+        @ConfigSerializable
+        interface AutoInviteConfig {
+            @Comment("Should we continuously invite mutual friends from primary + sub sessions")
+            @DefaultBoolean(true)
+            boolean enabled();
+
+            @Comment("Global invite interval in seconds")
+            @DefaultNumeric(30)
+            @NumericRange(from = 1, to = Integer.MAX_VALUE)
+            int interval();
+
+
+            @Comment("Invite only players currently online")
+            @DefaultBoolean(false)
+            boolean onlyOnline();
+        }
 
         @Comment("Friend expiry settings")
         ExpiryConfig expiry();
