@@ -331,6 +331,7 @@ public class SessionManager extends SessionManagerCore {
             return;
         }
 
+        scheduledThreadPool.execute(this::processAutoInvite);
         scheduledThreadPool.scheduleWithFixedDelay(this::processAutoInvite, friendSyncConfig.autoInvite().interval(), friendSyncConfig.autoInvite().interval(), TimeUnit.SECONDS);
     }
 
@@ -353,9 +354,9 @@ public class SessionManager extends SessionManagerCore {
     private void refreshInviteQueue() {
         Map<String, InviteTarget> queueTargets = new LinkedHashMap<>();
 
-        appendMutualInviteTargets(queueTargets, this);
+        appendInviteTargets(queueTargets, this);
         for (SubSessionManager subSessionManager : subSessionManagers.values()) {
-            appendMutualInviteTargets(queueTargets, subSessionManager);
+            appendInviteTargets(queueTargets, subSessionManager);
         }
 
         inviteQueue = new ArrayList<>(queueTargets.values());
@@ -363,10 +364,14 @@ public class SessionManager extends SessionManagerCore {
         logger.debug("Auto-invite list refreshed with " + inviteQueue.size() + " players");
     }
 
-    private void appendMutualInviteTargets(Map<String, InviteTarget> queueTargets, SessionManagerCore inviter) {
+    private void appendInviteTargets(Map<String, InviteTarget> queueTargets, SessionManagerCore inviter) {
         boolean onlyOnline = friendSyncConfig.autoInvite().onlyOnline();
 
-        for (FollowerResponse.Person person : inviter.friendManager().mutualFriends(true)) {
+        for (FollowerResponse.Person person : inviter.friendManager().refreshFriendCache()) {
+            // Only invite accounts that this session already follows.
+            if (!person.isFollowedByCaller) {
+                continue;
+            }
             if (onlyOnline && !inviter.friendManager().isOnline(person)) {
                 continue;
             }
