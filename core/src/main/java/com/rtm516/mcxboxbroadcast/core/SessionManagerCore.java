@@ -246,7 +246,7 @@ public abstract class SessionManagerCore {
 
         // Set the showcase image to the current screenshot
         File imageFile = storageManager.screenshot();
-        if (imageFile.exists()) {
+        if (shouldSetShowcaseImage() && imageFile.exists()) {
             logger.info("Setting showcase image");
             if (galleryManager.setShowcase(imageFile)) {
                 logger.info("Successfully set showcase image");
@@ -300,6 +300,10 @@ public abstract class SessionManagerCore {
             logger.debug("Failed to create session handle '"  + lastSessionResponse + "' (" + createHandleResponse.statusCode() + ")");
             throw new SessionCreationException("Unable to create session handle, got status " + createHandleResponse.statusCode() + " trying to create: " + createHandleResponse.body());
         }
+    }
+
+    protected boolean shouldSetShowcaseImage() {
+        return true;
     }
 
     /**

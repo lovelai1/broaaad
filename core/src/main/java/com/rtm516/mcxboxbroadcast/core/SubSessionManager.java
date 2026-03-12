@@ -56,6 +56,11 @@ public class SubSessionManager extends SessionManagerCore {
     }
 
     @Override
+    protected boolean shouldSetShowcaseImage() {
+        return false;
+    }
+
+    @Override
     protected void updateSession() throws SessionUpdateException {
         super.updateSessionInternal(
             Constants.JOIN_SESSION.formatted(parent.sessionInfo().getHandleId()),
