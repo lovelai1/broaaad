@@ -4,6 +4,7 @@ import com.google.gson.JsonParseException;
 import com.rtm516.mcxboxbroadcast.core.configs.CoreConfig;
 import com.rtm516.mcxboxbroadcast.core.exceptions.SessionCreationException;
 import com.rtm516.mcxboxbroadcast.core.exceptions.SessionUpdateException;
+import com.rtm516.mcxboxbroadcast.core.models.session.FollowerResponse;
 import com.rtm516.mcxboxbroadcast.core.models.session.CreateSessionRequest;
 import com.rtm516.mcxboxbroadcast.core.models.session.CreateSessionResponse;
 import com.rtm516.mcxboxbroadcast.core.notifications.NotificationManager;
@@ -316,7 +317,7 @@ public class SessionManager extends SessionManagerCore {
         }
 
         InviteTarget target = inviteQueue.get(inviteQueueIndex++);
-        target.inviter().sendSessionInvite(target.xuid());
+        target.inviter().sendSessionInvite(target.xuid(), target.gamertag());
     }
 
     private void refreshInviteQueue() {
@@ -333,13 +334,18 @@ public class SessionManager extends SessionManagerCore {
     }
 
     private void appendMutualInviteTargets(Map<String, InviteTarget> queueTargets, SessionManagerCore inviter) {
-        for (String xuid : inviter.friendManager().mutualFriendXuids(true)) {
-            queueTargets.putIfAbsent(xuid, new InviteTarget(xuid, inviter));
+        for (FollowerResponse.Person person : inviter.friendManager().mutualFriends(true)) {
+            String gamertag = person.gamertag != null && !person.gamertag.isBlank() ? person.gamertag : person.displayName;
+            if (gamertag == null || gamertag.isBlank()) {
+                gamertag = "Unknown";
+            }
+
+            queueTargets.putIfAbsent(person.xuid, new InviteTarget(person.xuid, gamertag, inviter));
         }
     }
 
 
-    private record InviteTarget(String xuid, SessionManagerCore inviter) {
+    private record InviteTarget(String xuid, String gamertag, SessionManagerCore inviter) {
     }
 
     /**

@@ -601,10 +601,15 @@ public class FriendManager {
     }
 
 
-    public List<String> mutualFriendXuids(boolean refresh) {
+    public List<FollowerResponse.Person> mutualFriends(boolean refresh) {
         List<FollowerResponse.Person> people = refresh ? refreshFriendCache() : lastFriendCache();
         return people.stream()
             .filter(person -> person.isFollowingCaller && person.isFollowedByCaller)
+            .collect(Collectors.toList());
+    }
+
+    public List<String> mutualFriendXuids(boolean refresh) {
+        return mutualFriends(refresh).stream()
             .map(person -> person.xuid)
             .distinct()
             .collect(Collectors.toList());
@@ -617,6 +622,16 @@ public class FriendManager {
             logger.error("Failed to refresh friends from Xbox Live", e);
             return lastFriendCache();
         }
+    }
+
+
+    private String resolveGamertag(String xuid) {
+        return lastFriendCache().stream()
+            .filter(person -> person.xuid.equals(xuid))
+            .map(person -> person.gamertag != null && !person.gamertag.isBlank() ? person.gamertag : person.displayName)
+            .filter(name -> name != null && !name.isBlank())
+            .findFirst()
+            .orElse("Unknown");
     }
 
     /**
@@ -656,9 +671,9 @@ public class FriendManager {
 
             HttpResponse<String> inviteResponse = httpClient.send(sendInvite, HttpResponse.BodyHandlers.ofString());
             if (inviteResponse.statusCode() == 200 || inviteResponse.statusCode() == 201) {
-                logger.info("Invite sent from " + sessionManager.gamertag() + " (" + sessionManager.userXUID() + ") to " + xuid);
+                logger.info("Invite sent from " + sessionManager.gamertag() + " (" + sessionManager.userXUID() + ") to " + resolveGamertag(xuid) + " (" + xuid + ")");
             } else {
-                logger.warn("Invite failed from " + sessionManager.gamertag() + " (" + sessionManager.userXUID() + ") to " + xuid + ": " + inviteResponse.statusCode());
+                logger.warn("Invite failed from " + sessionManager.gamertag() + " (" + sessionManager.userXUID() + ") to " + resolveGamertag(xuid) + " (" + xuid + "): " + inviteResponse.statusCode());
                 logger.debug(inviteResponse.body());
             }
         } catch (IOException | InterruptedException e) {

@@ -564,6 +564,18 @@ public abstract class SessionManagerCore {
      * @param xuid The XUID to invite
      */
     public void sendSessionInvite(String xuid) {
+        sendSessionInvite(xuid, "Unknown");
+    }
+
+    /**
+     * Send an invite to the current session using this account
+     *
+     * @param xuid The XUID to invite
+     * @param targetGamertag The gamertag of the invite target
+     */
+    public void sendSessionInvite(String xuid, String targetGamertag) {
+        String resolvedGamertag = (targetGamertag == null || targetGamertag.isBlank()) ? "Unknown" : targetGamertag;
+
         try {
             CreateHandleRequest createHandleContent = new CreateHandleRequest(
                 1,
@@ -586,13 +598,13 @@ public abstract class SessionManagerCore {
 
             HttpResponse<String> inviteResponse = httpClient.send(sendInvite, HttpResponse.BodyHandlers.ofString());
             if (inviteResponse.statusCode() == 200 || inviteResponse.statusCode() == 201) {
-                logger.info("Invite sent from " + gamertag() + " (" + userXUID() + ") to " + xuid);
+                logger.info("Invite sent from " + gamertag() + " (" + userXUID() + ") to " + resolvedGamertag + " (" + xuid + ")");
             } else {
-                logger.warn("Invite failed from " + gamertag() + " (" + userXUID() + ") to " + xuid + ": " + inviteResponse.statusCode());
+                logger.warn("Invite failed from " + gamertag() + " (" + userXUID() + ") to " + resolvedGamertag + " (" + xuid + "): " + inviteResponse.statusCode());
                 logger.debug(inviteResponse.body());
             }
         } catch (IOException | InterruptedException e) {
-            logger.error("Failed to send invite to " + xuid, e);
+            logger.error("Failed to send invite to " + resolvedGamertag + " (" + xuid + ")", e);
         }
     }
 
