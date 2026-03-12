@@ -91,6 +91,17 @@ public class FileStorageManager implements StorageManager {
         write("currentSessionResponse.json", data);
     }
 
+
+    @Override
+    public String sessionInfo() throws IOException {
+        return read("session_info.json");
+    }
+
+    @Override
+    public void sessionInfo(String data) throws IOException {
+        write("session_info.json", data);
+    }
+
     @Override
     public StorageManager subSession(String id) {
         return new FileStorageManager(Paths.get(cacheFolder, id).toString(), screenshotPath);

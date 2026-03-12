@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class StandaloneMain {
     private static CoreConfig config;
     private static StandaloneLoggerImpl logger;
-    private static SessionInfo sessionInfo;
+    public static SessionInfo sessionInfo;
     private static NotificationManager notificationManager;
 
     public static SessionManager sessionManager;

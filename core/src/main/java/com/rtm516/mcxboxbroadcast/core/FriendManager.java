@@ -207,7 +207,7 @@ public class FriendManager {
     }
 
     public void init(CoreConfig.FriendSyncConfig friendSyncConfig) {
-        shouldAcceptPendingRequests = friendSyncConfig.autoFollow();
+        shouldAcceptPendingRequests = friendSyncConfig.acceptPendingRequests();
 
         // Initialize the auto friend sync if enabled
         initAutoFriend(friendSyncConfig);

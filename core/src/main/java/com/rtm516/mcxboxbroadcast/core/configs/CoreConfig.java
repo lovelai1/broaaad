@@ -130,6 +130,10 @@ public interface CoreConfig {
         @DefaultBoolean(true)
         boolean initialInvite();
 
+        @Comment("Should we automatically accept pending friend requests on boot")
+        @DefaultBoolean(true)
+        boolean acceptPendingRequests();
+
         @Comment("Friend expiry settings")
         ExpiryConfig expiry();
 

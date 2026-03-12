@@ -1,7 +1,7 @@
 package com.rtm516.mcxboxbroadcast.core;
 
 import com.rtm516.mcxboxbroadcast.core.exceptions.SessionUpdateException;
-import com.rtm516.mcxboxbroadcast.core.models.session.JoinSessionRequest;
+import com.rtm516.mcxboxbroadcast.core.models.session.CreateSessionRequest;
 import com.rtm516.mcxboxbroadcast.core.notifications.NotificationManager;
 import com.rtm516.mcxboxbroadcast.core.storage.StorageManager;
 
@@ -22,9 +22,10 @@ public class SubSessionManager extends SessionManagerCore {
      * @param notificationManager The notification manager to use for sending messages
      * @param logger The logger to use for outputting messages
      */
-    public SubSessionManager(String id, SessionManager parent, StorageManager storageManager, NotificationManager notificationManager, Logger logger) {
+    public SubSessionManager(String id, SessionManager parent, SessionInfo sessionInfo, StorageManager storageManager, NotificationManager notificationManager, Logger logger) {
         super(storageManager, notificationManager, logger.prefixed("Sub-Session " + id));
         this.parent = parent;
+        this.sessionInfo = new ExpandedSessionInfo("", "", sessionInfo);
     }
 
     @Override
@@ -34,24 +35,28 @@ public class SubSessionManager extends SessionManagerCore {
 
     @Override
     public String getSessionId() {
-        return parent.sessionInfo().getSessionId();
+        return sessionInfo.getSessionId();
     }
 
     @Override
     protected boolean handleFriendship() {
-        // TODO Some form of force flag just in case the master friends list is full
-
-        // Add the main account
         boolean subAdd = friendManager().addIfRequired(parent.getXboxToken().userXUID(), parent.getXboxToken().gamertag());
-
-        // Get the main account to add us
         boolean mainAdd = parent.friendManager().addIfRequired(getXboxToken().userXUID(), getXboxToken().gamertag());
-
         return subAdd || mainAdd;
+    }
+
+    public void updateSession(SessionInfo sessionInfo) throws SessionUpdateException {
+        this.sessionInfo.updateSessionInfo(sessionInfo);
+        updateSession();
     }
 
     @Override
     protected void updateSession() throws SessionUpdateException {
-        super.updateSessionInternal(Constants.JOIN_SESSION.formatted(parent.sessionInfo().getHandleId()), new JoinSessionRequest(parent.sessionInfo()));
+        checkConnection();
+        super.updateSessionInternal(Constants.CREATE_SESSION.formatted(this.sessionInfo.getSessionId()), new CreateSessionRequest(this.sessionInfo));
+    }
+
+    public SessionInfo configuredSessionInfo() {
+        return this.sessionInfo.copy();
     }
 }

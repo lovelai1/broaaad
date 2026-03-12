@@ -17,12 +17,6 @@ public class Constants {
         .disableHtmlEscaping()
         .create();
 
-    public static final Gson GSON_NULLS = new GsonBuilder()
-        .registerTypeAdapter(Instant.class, new InstantConverter())
-        .registerTypeAdapter(Date.class, new DateConverter())
-        .serializeNulls()
-        .create();
-
     public static final String SERVICE_CONFIG_ID = "4fc10100-5f7a-4470-899b-280835760c07"; // The service config ID for Minecraft
     public static final String TEMPLATE_NAME = "MinecraftLobby";
     public static final String TITLE_ID = "896928775"; // The title ID for Minecraft Windows Edition
@@ -42,7 +36,7 @@ public class Constants {
     public static final URI SOCIAL = URI.create("https://peoplehub.xboxlive.com/users/me/people/social");
     public static final URI SOCIAL_SUMMARY = URI.create("https://social.xboxlive.com/users/me/summary");
     public static final String FOLLOWER = "https://social.xboxlive.com/users/me/people/follower/xuid(%s)";
-    public static final String PROFILE_SETTINGS = "https://profile.xboxlive.com/users/xuid(%s)/profile/settings?settings=Gamertag";
+    public static final String PROFILE_SETTINGS = "https://profile.xboxlive.com/users/me/profile/settings?settings=Gamertag";
 
     public static final String GALLERY = "https://persona.franchise.minecraft-services.net/api/v1.0/gallery";
 

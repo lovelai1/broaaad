@@ -89,6 +89,7 @@ public class MCXboxBroadcastExtension implements Extension {
                     source.sendMessage("Usage:");
                     source.sendMessage("accounts list");
                     source.sendMessage("accounts add/remove <sub-session-id>");
+                    source.sendMessage("accounts set <sub-session-id> <hostName|worldName|players|maxPlayers|ip|port> <value>");
                     return;
                 }
 
@@ -99,9 +100,65 @@ public class MCXboxBroadcastExtension implements Extension {
                     case "remove":
                         sessionManager.removeSubSession(args[1]);
                         break;
+                    case "set":
+                        if (args.length < 4) {
+                            source.sendMessage("Usage: accounts set <sub-session-id> <field> <value>");
+                            return;
+                        }
+                        SessionInfo info = sessionManager.sessionInfo().copy();
+                        String value = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
+                        switch (args[2]) {
+                            case "hostName" -> info.setHostName(value);
+                            case "worldName" -> info.setWorldName(value);
+                            case "players" -> info.setPlayers(Integer.parseInt(value));
+                            case "maxPlayers" -> info.setMaxPlayers(Integer.parseInt(value));
+                            case "ip" -> info.setIp(value);
+                            case "port" -> info.setPort(Integer.parseInt(value));
+                            default -> {
+                                source.sendMessage("Unknown field: " + args[2]);
+                                return;
+                            }
+                        }
+                        sessionManager.updateSubSessionInfo(args[1], info);
+                        source.sendMessage("Updated sub-session " + args[1]);
+                        break;
                     default:
                         source.sendMessage("Unknown accounts command: " + args[0]);
                 }
+            })
+            .build());
+
+
+        event.register(Command.builder(this)
+            .source(CommandSource.class)
+            .name("session")
+            .description("Manage primary session broadcast fields.")
+            .executor((source, command, args) -> {
+                if (!source.isConsole()) {
+                    source.sendMessage("This command can only be ran from the console.");
+                    return;
+                }
+
+                if (args.length < 3 || !args[0].equalsIgnoreCase("set")) {
+                    source.sendMessage("Usage: session set <hostName|worldName|players|maxPlayers|ip|port> <value>");
+                    return;
+                }
+
+                String value = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
+                switch (args[1]) {
+                    case "hostName" -> sessionInfo.setHostName(value);
+                    case "worldName" -> sessionInfo.setWorldName(value);
+                    case "players" -> sessionInfo.setPlayers(Integer.parseInt(value));
+                    case "maxPlayers" -> sessionInfo.setMaxPlayers(Integer.parseInt(value));
+                    case "ip" -> sessionInfo.setIp(value);
+                    case "port" -> sessionInfo.setPort(Integer.parseInt(value));
+                    default -> {
+                        source.sendMessage("Unknown field: " + args[1]);
+                        return;
+                    }
+                }
+
+                source.sendMessage("Updated primary session field " + args[1]);
             })
             .build());
 

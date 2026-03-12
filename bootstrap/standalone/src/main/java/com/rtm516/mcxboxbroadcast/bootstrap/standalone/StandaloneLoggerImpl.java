@@ -2,6 +2,7 @@ package com.rtm516.mcxboxbroadcast.bootstrap.standalone;
 
 import com.rtm516.mcxboxbroadcast.core.BuildData;
 import com.rtm516.mcxboxbroadcast.core.Logger;
+import com.rtm516.mcxboxbroadcast.core.SessionInfo;
 import net.minecrell.terminalconsole.SimpleTerminalConsole;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
@@ -20,55 +21,31 @@ public class StandaloneLoggerImpl extends SimpleTerminalConsole implements Logge
     }
 
     @Override
-    public void info(String message) {
-        logger.info(prefix(message));
-    }
-
+    public void info(String message) { logger.info(prefix(message)); }
     @Override
-    public void warn(String message) {
-        logger.warn(prefix(message));
-    }
-
+    public void warn(String message) { logger.warn(prefix(message)); }
     @Override
-    public void error(String message) {
-        logger.error(prefix(message));
-    }
-
+    public void error(String message) { logger.error(prefix(message)); }
     @Override
-    public void error(String message, Throwable ex) {
-        logger.error(prefix(message), ex);
-    }
-
+    public void error(String message, Throwable ex) { logger.error(prefix(message), ex); }
     @Override
-    public void debug(String message) {
-        logger.debug(prefix(message));
-    }
-
+    public void debug(String message) { logger.debug(prefix(message)); }
     @Override
-    public Logger prefixed(String prefixString) {
-        return new StandaloneLoggerImpl(logger, prefixString);
-    }
+    public Logger prefixed(String prefixString) { return new StandaloneLoggerImpl(logger, prefixString); }
 
     private String prefix(String message) {
-        if (prefixString.isEmpty()) {
-            return message;
-        } else {
-            return "[" + prefixString + "] " + message;
-        }
+        return prefixString.isEmpty() ? message : "[" + prefixString + "] " + message;
     }
 
-    public void setDebug(boolean debug) {
-        Configurator.setLevel(logger.getName(), debug ? Level.DEBUG : Level.INFO);
-    }
+    public void setDebug(boolean debug) { Configurator.setLevel(logger.getName(), debug ? Level.DEBUG : Level.INFO); }
 
     @Override
-    protected boolean isRunning() {
-        return true;
-    }
+    protected boolean isRunning() { return true; }
 
     @Override
     protected void runCommand(String command) {
-        String commandNode = command.split(" ")[0].toLowerCase();
+        String[] args = command.split(" ");
+        String commandNode = args[0].toLowerCase();
         try {
             switch (commandNode) {
                 case "exit" -> System.exit(0);
@@ -77,26 +54,8 @@ public class StandaloneLoggerImpl extends SimpleTerminalConsole implements Logge
                     info("Dumping session responses to 'lastSessionResponse.json' and 'currentSessionResponse.json'");
                     StandaloneMain.sessionManager.dumpSession();
                 }
-                case "accounts" -> {
-                    String[] args = command.split(" ");
-                    if (args.length < 3) {
-                        if (args.length == 2 && args[1].equalsIgnoreCase("list")) {
-                            StandaloneMain.sessionManager.listSessions();
-                            return;
-                        }
-
-                        warn("Usage:");
-                        warn("accounts list");
-                        warn("accounts add/remove <sub-session-id>");
-                        return;
-                    }
-
-                    switch (args[1].toLowerCase()) {
-                        case "add" -> StandaloneMain.sessionManager.addSubSession(args[2]);
-                        case "remove" -> StandaloneMain.sessionManager.removeSubSession(args[2]);
-                        default -> warn("Unknown accounts command: " + args[1]);
-                    }
-                }
+                case "accounts" -> handleAccounts(args);
+                case "session" -> handlePrimarySession(args);
                 case "version" -> info("MCXboxBroadcast Standalone " + BuildData.VERSION);
                 case "help" -> {
                     info("Available commands:");
@@ -106,6 +65,8 @@ public class StandaloneLoggerImpl extends SimpleTerminalConsole implements Logge
                     info("accounts list - List sub-accounts");
                     info("accounts add <sub-session-id> - Add a sub-account");
                     info("accounts remove <sub-session-id> - Remove a sub-account");
+                    info("accounts set <sub-session-id> <hostName|worldName|players|maxPlayers|ip|port> <value> - Edit sub-session broadcast fields");
+                    info("session set <hostName|worldName|players|maxPlayers|ip|port> <value> - Edit primary broadcast fields");
                     info("version - Display the version");
                 }
                 default -> warn("Unknown command: " + commandNode);
@@ -115,8 +76,63 @@ public class StandaloneLoggerImpl extends SimpleTerminalConsole implements Logge
         }
     }
 
-    @Override
-    protected void shutdown() {
 
+    private void handlePrimarySession(String[] args) {
+        if (args.length < 4 || !args[1].equalsIgnoreCase("set")) {
+            warn("Usage: session set <field> <value>");
+            return;
+        }
+        applyField(StandaloneMain.sessionInfo, args[2], joinFrom(args, 3));
+        info("Updated primary session field " + args[2]);
     }
+    private void handleAccounts(String[] args) {
+        if (args.length < 2) {
+            warn("Usage:");
+            warn("accounts list");
+            warn("accounts add/remove <sub-session-id>");
+            warn("accounts set <sub-session-id> <field> <value>");
+            return;
+        }
+
+        switch (args[1].toLowerCase()) {
+            case "list" -> StandaloneMain.sessionManager.listSessions();
+            case "add" -> StandaloneMain.sessionManager.addSubSession(args[2]);
+            case "remove" -> StandaloneMain.sessionManager.removeSubSession(args[2]);
+            case "set" -> {
+                if (args.length < 5) {
+                    warn("accounts set <sub-session-id> <field> <value>");
+                    return;
+                }
+                SessionInfo info = StandaloneMain.sessionManager.sessionInfo().copy();
+                applyField(info, args[3], joinFrom(args, 4));
+                StandaloneMain.sessionManager.updateSubSessionInfo(args[2], info);
+                info("Updated sub-session " + args[2] + " field " + args[3]);
+            }
+            default -> warn("Unknown accounts command: " + args[1]);
+        }
+    }
+
+    private static String joinFrom(String[] args, int idx) {
+        StringBuilder out = new StringBuilder();
+        for (int i = idx; i < args.length; i++) {
+            if (i > idx) out.append(' ');
+            out.append(args[i]);
+        }
+        return out.toString();
+    }
+
+    private static void applyField(SessionInfo info, String field, String value) {
+        switch (field) {
+            case "hostName" -> info.setHostName(value);
+            case "worldName" -> info.setWorldName(value);
+            case "players" -> info.setPlayers(Integer.parseInt(value));
+            case "maxPlayers" -> info.setMaxPlayers(Integer.parseInt(value));
+            case "ip" -> info.setIp(value);
+            case "port" -> info.setPort(Integer.parseInt(value));
+            default -> throw new IllegalArgumentException("Unknown field " + field);
+        }
+    }
+
+    @Override
+    protected void shutdown() {}
 }

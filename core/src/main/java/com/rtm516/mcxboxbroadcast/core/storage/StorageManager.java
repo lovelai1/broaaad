@@ -18,6 +18,9 @@ public interface StorageManager {
     String currentSessionResponse() throws IOException;
     void currentSessionResponse(String data) throws IOException;
 
+    String sessionInfo() throws IOException;
+    void sessionInfo(String data) throws IOException;
+
     StorageManager subSession(String id);
 
     File screenshot();

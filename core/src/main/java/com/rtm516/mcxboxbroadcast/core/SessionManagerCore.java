@@ -7,7 +7,6 @@ import com.rtm516.mcxboxbroadcast.core.exceptions.SessionUpdateException;
 import com.rtm516.mcxboxbroadcast.core.models.auth.SessionStartBody;
 import com.rtm516.mcxboxbroadcast.core.models.auth.SessionStartResponse;
 import com.rtm516.mcxboxbroadcast.core.models.auth.XboxTokenInfo;
-import com.rtm516.mcxboxbroadcast.core.models.other.ProfileSettingsResponse;
 import com.rtm516.mcxboxbroadcast.core.models.session.CreateHandleRequest;
 import com.rtm516.mcxboxbroadcast.core.models.session.CreateHandleResponse;
 import com.rtm516.mcxboxbroadcast.core.models.session.SessionRef;
@@ -157,8 +156,6 @@ public abstract class SessionManagerCore {
 
         logger.info("Successfully authenticated as " + tokenInfo.gamertag() + " (" + tokenInfo.userXUID() + ") with " + friendCount + "/" + Constants.MAX_FRIENDS + " friends");
 
-        // Check if the gamertag has been updated
-        checkGamertagUpdate(tokenInfo);
 
         if (handleFriendship()) {
             logger.info("Waiting for friendship to be processed...");
@@ -496,38 +493,6 @@ public abstract class SessionManagerCore {
         }
 
         return new SocialSummaryResponse(-1, -1, false, false, false, false, "", -1, -1, "");
-    }
-
-    /**
-     * Check if the gamertag has been updated and update it if needed
-     *
-     * @param tokenInfo The token information to check the gamertag for
-     */
-    private void checkGamertagUpdate(XboxTokenInfo tokenInfo) {
-        try {
-            HttpResponse<String> response = httpClient.send(HttpRequest.newBuilder()
-                .uri(URI.create(Constants.PROFILE_SETTINGS.formatted(tokenInfo.userXUID())))
-                .header("Content-Type", "application/json")
-                .header("Authorization", tokenInfo.tokenHeader())
-                .header("x-xbl-contract-version", "3")
-                .GET()
-                .build(), HttpResponse.BodyHandlers.ofString());
-
-            ProfileSettingsResponse profileSettingsResponse = Constants.GSON.fromJson(response.body(), ProfileSettingsResponse.class);
-
-            if (profileSettingsResponse == null) {
-                logger.error("Unable to get profile settings (" + response.statusCode() + "): " + response.body());
-                return;
-            }
-
-            String newGamertag = profileSettingsResponse.profileUsers().get(0).settings().get(0).value();
-            if (!newGamertag.equals(tokenInfo.gamertag())) {
-                logger.info("Gamertag changed from " + tokenInfo.gamertag() + " to " + newGamertag);
-                authManager.updateGamertag(newGamertag);
-            }
-        } catch (IOException | InterruptedException | NullPointerException e) {
-            logger.error("Failed to check profile settings", e);
-        }
     }
 
     /**

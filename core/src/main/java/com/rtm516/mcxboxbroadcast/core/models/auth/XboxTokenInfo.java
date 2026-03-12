@@ -9,8 +9,8 @@ public record XboxTokenInfo(
     String XSTSToken,
     String expiresOn) {
 
-    public XboxTokenInfo(StepXblSisuAuthentication.XblSisuTokens xboxToken) {
-        this(xboxToken.getDisplayClaims().get("xid"), xboxToken.getUserHash(), xboxToken.getDisplayClaims().get("gtg"), xboxToken.getToken(), String.valueOf(xboxToken.getExpireTimeMs()));
+    public XboxTokenInfo(String userXUID, String gamertag, StepXblSisuAuthentication.XblSisuTokens xboxToken) {
+        this(userXUID, xboxToken.getUserHash(), gamertag, xboxToken.getToken(), String.valueOf(xboxToken.getExpireTimeMs()));
     }
 
     public String tokenHeader() {

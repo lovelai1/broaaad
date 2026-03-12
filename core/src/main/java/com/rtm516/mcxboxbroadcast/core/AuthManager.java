@@ -4,10 +4,14 @@ import com.google.gson.JsonObject;
 import com.rtm516.mcxboxbroadcast.core.models.auth.PlayfabLoginBody;
 import com.rtm516.mcxboxbroadcast.core.models.auth.SisuAuthorizeBody;
 import com.rtm516.mcxboxbroadcast.core.models.auth.XboxTokenInfo;
+import com.rtm516.mcxboxbroadcast.core.models.other.ProfileSettingsResponse;
 import com.rtm516.mcxboxbroadcast.core.models.auth.XstsAuthData;
 import com.rtm516.mcxboxbroadcast.core.notifications.NotificationManager;
 import com.rtm516.mcxboxbroadcast.core.storage.StorageManager;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 import net.lenni0451.commons.httpclient.HttpClient;
 import net.lenni0451.commons.httpclient.requests.HttpContentRequest;
@@ -39,6 +43,8 @@ public class AuthManager {
     private StepXblSisuAuthentication.XblSisuTokens xboxToken;
     private XboxTokenInfo xboxTokenInfo;
     private String playfabSessionTicket;
+    private String profileGamertag;
+    private String profileXuid;
     private Runnable onDeviceTokenRefreshCallback;
 
 
@@ -108,8 +114,7 @@ public class AuthManager {
             // Save to cache.json
             storageManager.cache(Constants.GSON.toJson(MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.toJson(xboxToken)));
 
-            // Construct and store the Xbox token info
-            xboxTokenInfo = new XboxTokenInfo(xboxToken);
+            refreshProfileIdentity();
 
             playfabSessionTicket = fetchPlayfabSessionTicket(httpClient);
 
@@ -171,16 +176,52 @@ public class AuthManager {
     }
 
     public void updateGamertag(String gamertag) {
-        try {
-            JsonObject xboxTokenJson = MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.toJson(xboxToken);
-            xboxTokenJson.getAsJsonObject("xstsToken").getAsJsonObject("displayClaims").addProperty("gtg", gamertag);
-            xboxToken = MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.fromJson(xboxTokenJson);
+        this.profileGamertag = gamertag;
+        refreshCachedXboxTokenInfo();
+    }
 
-            storageManager.cache(Constants.GSON.toJson(MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.toJson(xboxToken)));
-            xboxTokenInfo = new XboxTokenInfo(xboxToken);
+    private void refreshProfileIdentity() {
+        try {
+            HttpRequest profileRequest = HttpRequest.newBuilder()
+                .uri(URI.create(Constants.PROFILE_SETTINGS))
+                .header("Content-Type", "application/json")
+                .header("Authorization", tokenHeader())
+                .header("x-xbl-contract-version", "3")
+                .GET()
+                .build();
+
+            HttpResponse<String> response = java.net.http.HttpClient.newHttpClient().send(profileRequest, HttpResponse.BodyHandlers.ofString());
+            ProfileSettingsResponse profile = Constants.GSON.fromJson(response.body(), ProfileSettingsResponse.class);
+            if (response.statusCode() == 200 && profile != null) {
+                String fetchedGamertag = profile.gamertag();
+                String fetchedXuid = profile.xuid();
+
+                if (fetchedGamertag != null && !fetchedGamertag.isBlank()) {
+                    this.profileGamertag = fetchedGamertag;
+                }
+                if (fetchedXuid != null && !fetchedXuid.isBlank()) {
+                    this.profileXuid = fetchedXuid;
+                }
+            } else {
+                logger.error("Failed to fetch Xbox profile settings (" + response.statusCode() + ") " + response.body());
+            }
         } catch (Exception e) {
-            logger.error("Failed to update gamertag", e);
+            logger.error("Failed to refresh profile identity", e);
         }
+
+        refreshCachedXboxTokenInfo();
+    }
+
+    private String tokenHeader() {
+        return "XBL3.0 x=" + xboxToken.getUserHash() + ";" + xboxToken.getToken();
+    }
+
+    private void refreshCachedXboxTokenInfo() {
+        if (xboxToken == null) return;
+
+        String xuid = (profileXuid != null && !profileXuid.isBlank()) ? profileXuid : xboxToken.getDisplayClaims().get("xid");
+        String gamertag = (profileGamertag != null && !profileGamertag.isBlank()) ? profileGamertag : xboxToken.getDisplayClaims().get("gtg");
+        xboxTokenInfo = new XboxTokenInfo(xuid, gamertag, xboxToken);
     }
 
     /**
