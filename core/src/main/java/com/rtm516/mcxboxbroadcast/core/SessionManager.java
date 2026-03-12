@@ -279,6 +279,7 @@ public class SessionManager extends SessionManagerCore {
         messages.add("Primary Session:");
         messages.add(" - Gamertag: " + getXboxToken().gamertag());
         messages.add("   Following: " + socialSummary().targetFollowingCount() + "/" + Constants.MAX_FRIENDS);
+        appendPresenceSummary(messages, friendManager(), "   ");
 
         if (!subSessionManagers.isEmpty()) {
             messages.add("Sub-sessions: (" + subSessionManagers.size() + ")");
@@ -286,6 +287,7 @@ public class SessionManager extends SessionManagerCore {
                 messages.add(" - ID: " + subSession.getKey());
                 messages.add("   Gamertag: " + subSession.getValue().getXboxToken().gamertag());
                 messages.add("   Following: " + subSession.getValue().socialSummary().targetFollowingCount() + "/" + Constants.MAX_FRIENDS);
+                appendPresenceSummary(messages, subSession.getValue().friendManager(), "   ");
             }
         } else {
             messages.add("No sub-sessions");
@@ -294,6 +296,34 @@ public class SessionManager extends SessionManagerCore {
         for (String message : messages) {
             coreLogger.info(message);
         }
+    }
+
+
+    private void appendPresenceSummary(List<String> messages, FriendManager friendManager, String indent) {
+        List<FollowerResponse.Person> sorted = friendManager.sortedByOnline(true);
+        List<FollowerResponse.Person> online = sorted.stream().filter(friendManager::isOnline).collect(java.util.stream.Collectors.toList());
+
+        messages.add(indent + "Friends online: " + online.size() + "/" + sorted.size());
+        if (online.isEmpty()) {
+            messages.add(indent + "Online list: none");
+            return;
+        }
+
+        StringBuilder onlineList = new StringBuilder();
+        int limit = Math.min(20, online.size());
+        for (int i = 0; i < limit; i++) {
+            FollowerResponse.Person person = online.get(i);
+            if (i > 0) {
+                onlineList.append(", ");
+            }
+            onlineList.append(friendManager.displayName(person));
+        }
+
+        if (online.size() > limit) {
+            onlineList.append(" ... (+").append(online.size() - limit).append(")");
+        }
+
+        messages.add(indent + "Online list: " + onlineList);
     }
 
     private void startAutoInviteLoop() {

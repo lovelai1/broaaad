@@ -625,6 +625,43 @@ public class FriendManager {
     }
 
 
+    public List<FollowerResponse.Person> sortedByOnline(boolean refresh) {
+        List<FollowerResponse.Person> people = refresh ? refreshFriendCache() : lastFriendCache();
+        return people.stream()
+            .sorted((a, b) -> {
+                boolean aOnline = isOnline(a);
+                boolean bOnline = isOnline(b);
+                if (aOnline != bOnline) {
+                    return aOnline ? -1 : 1;
+                }
+
+                String aName = displayName(a).toLowerCase();
+                String bName = displayName(b).toLowerCase();
+                return aName.compareTo(bName);
+            })
+            .collect(Collectors.toList());
+    }
+
+    public List<FollowerResponse.Person> onlineFriends(boolean refresh) {
+        return sortedByOnline(refresh).stream()
+            .filter(this::isOnline)
+            .collect(Collectors.toList());
+    }
+
+    public String displayName(FollowerResponse.Person person) {
+        if (person.gamertag != null && !person.gamertag.isBlank()) {
+            return person.gamertag;
+        }
+        if (person.displayName != null && !person.displayName.isBlank()) {
+            return person.displayName;
+        }
+        return person.xuid;
+    }
+
+    public boolean isOnline(FollowerResponse.Person person) {
+        return person.presenceState != null && !person.presenceState.equalsIgnoreCase("Offline");
+    }
+
     private String resolveGamertag(String xuid) {
         return lastFriendCache().stream()
             .filter(person -> person.xuid.equals(xuid))
