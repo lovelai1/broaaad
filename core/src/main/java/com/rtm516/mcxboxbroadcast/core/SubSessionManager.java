@@ -1,7 +1,7 @@
 package com.rtm516.mcxboxbroadcast.core;
 
 import com.rtm516.mcxboxbroadcast.core.exceptions.SessionUpdateException;
-import com.rtm516.mcxboxbroadcast.core.models.session.JoinSessionRequest;
+import com.rtm516.mcxboxbroadcast.core.models.session.CreateSessionRequest;
 import com.rtm516.mcxboxbroadcast.core.notifications.NotificationManager;
 import com.rtm516.mcxboxbroadcast.core.storage.StorageManager;
 
@@ -26,10 +26,9 @@ public class SubSessionManager extends SessionManagerCore {
         super(storageManager, notificationManager, logger.prefixed("Sub-Session " + id));
         this.parent = parent;
 
-        // Sub-sessions need their own connection/xuid context for JOIN_SESSION payload updates.
-        // We seed with parent public session settings, but keep the same shared Xbox session id.
+        // Sub-sessions now behave like primary sessions:
+        // they keep their own session id and update their own CREATE_SESSION endpoint.
         this.sessionInfo = new ExpandedSessionInfo("", "", parent.sessionInfo().copy());
-        this.sessionInfo.setSessionId(parent.sessionInfo().getSessionId());
     }
 
     @Override
@@ -39,20 +38,13 @@ public class SubSessionManager extends SessionManagerCore {
 
     @Override
     public String getSessionId() {
-        return parent.sessionInfo().getSessionId();
+        return sessionInfo.getSessionId();
     }
 
     @Override
     protected boolean handleFriendship() {
-        // TODO Some form of force flag just in case the master friends list is full
-
-        // Add the main account
-        boolean subAdd = friendManager().addIfRequired(parent.getXboxToken().userXUID(), parent.getXboxToken().gamertag());
-
-        // Get the main account to add us
-        boolean mainAdd = parent.friendManager().addIfRequired(getXboxToken().userXUID(), getXboxToken().gamertag());
-
-        return subAdd || mainAdd;
+        // Treat sub-sessions the same as primary sessions.
+        return false;
     }
 
     @Override
@@ -62,13 +54,12 @@ public class SubSessionManager extends SessionManagerCore {
 
     @Override
     protected void updateSession() throws SessionUpdateException {
-        if (this.sessionInfo == null || this.sessionInfo.getConnectionId() == null || this.sessionInfo.getConnectionId().isBlank()) {
-            throw new SessionUpdateException("Sub-session is missing connection info and cannot join the parent session");
-        }
+        // Make sure the websocket connection is still active
+        checkConnection();
 
         super.updateSessionInternal(
-            Constants.JOIN_SESSION.formatted(parent.sessionInfo().getHandleId()),
-            new JoinSessionRequest(this.sessionInfo)
+            Constants.CREATE_SESSION.formatted(this.sessionInfo.getSessionId()),
+            new CreateSessionRequest(this.sessionInfo)
         );
     }
 }
