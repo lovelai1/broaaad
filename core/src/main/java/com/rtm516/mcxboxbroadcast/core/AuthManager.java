@@ -1,5 +1,6 @@
 package com.rtm516.mcxboxbroadcast.core;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.rtm516.mcxboxbroadcast.core.models.auth.PlayfabLoginBody;
 import com.rtm516.mcxboxbroadcast.core.models.auth.SisuAuthorizeBody;
@@ -86,7 +87,11 @@ public class AuthManager {
         if (xboxToken == null) {
             try {
                 String cacheData = storageManager.cache();
-                if (!cacheData.isBlank()) xboxToken = MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.fromJson(JsonUtil.parseString(cacheData).getAsJsonObject());
+                if (!cacheData.isBlank()) {
+                    JsonObject parsedCache = JsonUtil.parseString(cacheData).getAsJsonObject();
+                    JsonObject normalizedCache = normalizeCacheJson(parsedCache);
+                    xboxToken = MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.fromJson(normalizedCache);
+                }
             } catch (Exception e) {
                 logger.error("Failed to load cache.json", e);
             }
@@ -144,6 +149,56 @@ public class AuthManager {
         JsonObject playfabResponse = httpClient.execute(playfabRequest, new PlayFabResponseHandler());
 
         return playfabResponse.getAsJsonObject("data").get("SessionTicket").getAsString();
+    }
+
+
+    private JsonObject normalizeCacheJson(JsonObject cacheJson) {
+        if (cacheJson == null || cacheJson.has("initialXblSession")) {
+            return cacheJson;
+        }
+
+        // Fallback for flat cache layouts exported by some tools
+        if (!cacheJson.has("msaApplicationConfig") || !cacheJson.has("deviceType")) {
+            return cacheJson;
+        }
+
+        JsonObject normalized = new JsonObject();
+        JsonObject initialXblSession = new JsonObject();
+
+        copyIfPresent(cacheJson, initialXblSession, "_saveVersion");
+        copyIfPresent(cacheJson, initialXblSession, "msaApplicationConfig");
+        copyIfPresent(cacheJson, initialXblSession, "deviceType");
+        copyIfPresent(cacheJson, initialXblSession, "deviceKeyPair");
+        copyIfPresent(cacheJson, initialXblSession, "deviceId");
+        copyIfPresent(cacheJson, initialXblSession, "sessionKeyPair");
+        copyIfPresent(cacheJson, initialXblSession, "msaToken");
+        copyIfPresent(cacheJson, initialXblSession, "xblDeviceToken");
+        copyIfPresent(cacheJson, initialXblSession, "xblUserToken");
+        copyIfPresent(cacheJson, initialXblSession, "xblTitleToken");
+
+        normalized.add("initialXblSession", initialXblSession);
+
+        copyIfPresent(cacheJson, normalized, "_saveVersion");
+        copyIfPresent(cacheJson, normalized, "xboxLiveXstsToken");
+        copyIfPresent(cacheJson, normalized, "playFabXstsToken");
+        copyIfPresent(cacheJson, normalized, "bedrockXstsToken");
+        copyIfPresent(cacheJson, normalized, "playFabToken");
+        copyIfPresent(cacheJson, normalized, "minecraftSession");
+
+        // Some versions expect this key name
+        if (cacheJson.has("xboxLiveXstsToken") && !normalized.has("xstsToken")) {
+            normalized.add("xstsToken", cacheJson.get("xboxLiveXstsToken").deepCopy());
+        }
+
+        logger.info("Detected flat cache.json format, normalized it for auth loading");
+        return normalized;
+    }
+
+    private void copyIfPresent(JsonObject from, JsonObject to, String key) {
+        JsonElement element = from.get(key);
+        if (element != null && !element.isJsonNull()) {
+            to.add(key, element.deepCopy());
+        }
     }
 
     /**
