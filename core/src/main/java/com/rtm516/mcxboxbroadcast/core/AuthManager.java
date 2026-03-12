@@ -5,9 +5,12 @@ import com.rtm516.mcxboxbroadcast.core.models.auth.PlayfabLoginBody;
 import com.rtm516.mcxboxbroadcast.core.models.auth.SisuAuthorizeBody;
 import com.rtm516.mcxboxbroadcast.core.models.auth.XboxTokenInfo;
 import com.rtm516.mcxboxbroadcast.core.models.auth.XstsAuthData;
+import com.rtm516.mcxboxbroadcast.core.models.other.ProfileSettingsResponse;
 import com.rtm516.mcxboxbroadcast.core.notifications.NotificationManager;
 import com.rtm516.mcxboxbroadcast.core.storage.StorageManager;
 import java.io.IOException;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 import net.lenni0451.commons.httpclient.HttpClient;
 import net.lenni0451.commons.httpclient.requests.HttpContentRequest;
@@ -108,8 +111,8 @@ public class AuthManager {
             // Save to cache.json
             storageManager.cache(Constants.GSON.toJson(MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.toJson(xboxToken)));
 
-            // Construct and store the Xbox token info
-            xboxTokenInfo = new XboxTokenInfo(xboxToken);
+            // Construct and store the Xbox token info from profile data
+            xboxTokenInfo = fetchXboxTokenInfo();
 
             playfabSessionTicket = fetchPlayfabSessionTicket(httpClient);
 
@@ -177,10 +180,45 @@ public class AuthManager {
             xboxToken = MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.fromJson(xboxTokenJson);
 
             storageManager.cache(Constants.GSON.toJson(MinecraftAuth.BEDROCK_XBL_DEVICE_CODE_LOGIN.toJson(xboxToken)));
-            xboxTokenInfo = new XboxTokenInfo(xboxToken);
+            xboxTokenInfo = new XboxTokenInfo(xboxToken, xboxTokenInfo.userXUID(), gamertag);
         } catch (Exception e) {
             logger.error("Failed to update gamertag", e);
         }
+    }
+
+
+    private XboxTokenInfo fetchXboxTokenInfo() throws IOException {
+        String tokenHeader = "XBL3.0 x=" + xboxToken.getUserHash() + ";" + xboxToken.getToken();
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(Constants.PROFILE_SETTINGS)
+            .header("Content-Type", "application/json")
+            .header("Authorization", tokenHeader)
+            .header("x-xbl-contract-version", "3")
+            .GET()
+            .build();
+
+        try {
+            HttpResponse<String> response = java.net.http.HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            ProfileSettingsResponse profileSettings = Constants.GSON.fromJson(response.body(), ProfileSettingsResponse.class);
+
+            if (profileSettings != null && !profileSettings.profileUsers().isEmpty() && !profileSettings.profileUsers().get(0).settings().isEmpty()) {
+                ProfileSettingsResponse.ProfileUser user = profileSettings.profileUsers().get(0);
+                String xuid = user.id();
+                String gamertag = user.settings().get(0).value();
+
+                if (xuid != null && !xuid.isBlank() && gamertag != null && !gamertag.isBlank()) {
+                    return new XboxTokenInfo(xboxToken, xuid, gamertag);
+                }
+            }
+
+            logger.warn("Falling back to XSTS display claims for profile fields");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Failed to fetch profile settings", e);
+        }
+
+        return new XboxTokenInfo(xboxToken, xboxToken.getDisplayClaims().get("xid"), xboxToken.getDisplayClaims().get("gtg"));
     }
 
     /**

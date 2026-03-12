@@ -506,7 +506,7 @@ public abstract class SessionManagerCore {
     private void checkGamertagUpdate(XboxTokenInfo tokenInfo) {
         try {
             HttpResponse<String> response = httpClient.send(HttpRequest.newBuilder()
-                .uri(URI.create(Constants.PROFILE_SETTINGS.formatted(tokenInfo.userXUID())))
+                .uri(Constants.PROFILE_SETTINGS)
                 .header("Content-Type", "application/json")
                 .header("Authorization", tokenInfo.tokenHeader())
                 .header("x-xbl-contract-version", "3")
