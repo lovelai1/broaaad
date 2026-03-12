@@ -364,7 +364,13 @@ public class SessionManager extends SessionManagerCore {
     }
 
     private void appendMutualInviteTargets(Map<String, InviteTarget> queueTargets, SessionManagerCore inviter) {
+        boolean onlyOnline = friendSyncConfig.autoInvite().onlyOnline();
+
         for (FollowerResponse.Person person : inviter.friendManager().mutualFriends(true)) {
+            if (onlyOnline && !inviter.friendManager().isOnline(person)) {
+                continue;
+            }
+
             String gamertag = person.gamertag != null && !person.gamertag.isBlank() ? person.gamertag : person.displayName;
             if (gamertag == null || gamertag.isBlank()) {
                 gamertag = "Unknown";

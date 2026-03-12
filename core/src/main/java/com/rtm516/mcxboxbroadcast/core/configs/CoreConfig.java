@@ -164,6 +164,11 @@ public interface CoreConfig {
             @DefaultNumeric(30)
             @NumericRange(from = 1, to = Integer.MAX_VALUE)
             int interval();
+
+
+            @Comment("Invite only players currently online")
+            @DefaultBoolean(false)
+            boolean onlyOnline();
         }
 
         @Comment("Friend expiry settings")
