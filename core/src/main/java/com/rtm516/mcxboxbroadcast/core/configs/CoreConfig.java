@@ -61,6 +61,15 @@ public interface CoreConfig {
 
 
 
+
+        @Comment("Force advertised host name, leave empty to use live values")
+        @DefaultString("")
+        String forcedHostName();
+
+        @Comment("Force advertised world name, leave empty to use live values")
+        @DefaultString("")
+        String forcedWorldName();
+
         @Comment("Force advertised online player count, set to -1 to use live values")
         @DefaultNumeric(-1)
         int forcedPlayers();

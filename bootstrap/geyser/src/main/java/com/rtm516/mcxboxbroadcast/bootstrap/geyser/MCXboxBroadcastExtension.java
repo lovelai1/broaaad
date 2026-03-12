@@ -189,8 +189,8 @@ public class MCXboxBroadcastExtension implements Extension {
 
             // Create the session information based on the Geyser config
             sessionInfo = new SessionInfo();
-            sessionInfo.setHostName(this.geyserApi().bedrockListener().secondaryMotd());
-            sessionInfo.setWorldName(this.geyserApi().bedrockListener().primaryMotd());
+            sessionInfo.setHostName(resolveHostName(this.geyserApi().bedrockListener().secondaryMotd()));
+            sessionInfo.setWorldName(resolveWorldName(this.geyserApi().bedrockListener().primaryMotd()));
             sessionInfo.setPlayers(resolvePlayers(this.geyserApi().onlineConnections().size()));
             sessionInfo.setMaxPlayers(resolveMaxPlayers(GeyserImpl.getInstance().config().motd().maxPlayers())); // TODO Find API equivalent
 
@@ -218,8 +218,8 @@ public class MCXboxBroadcastExtension implements Extension {
         }
 
         // Allows support for motd and player count passthrough
-        sessionInfo.setHostName(event.secondaryMotd());
-        sessionInfo.setWorldName(event.primaryMotd());
+        sessionInfo.setHostName(resolveHostName(event.secondaryMotd()));
+        sessionInfo.setWorldName(resolveWorldName(event.primaryMotd()));
         
         sessionInfo.setPlayers(resolvePlayers(event.playerCount()));
         sessionInfo.setMaxPlayers(resolveMaxPlayers(event.maxPlayerCount()));
@@ -230,6 +230,17 @@ public class MCXboxBroadcastExtension implements Extension {
         }
     }
 
+
+
+    private String resolveHostName(String liveHostName) {
+        String forced = config.session().forcedHostName();
+        return forced == null || forced.isBlank() ? liveHostName : forced;
+    }
+
+    private String resolveWorldName(String liveWorldName) {
+        String forced = config.session().forcedWorldName();
+        return forced == null || forced.isBlank() ? liveWorldName : forced;
+    }
 
     private int resolvePlayers(int livePlayers) {
         int forced = config.session().forcedPlayers();
