@@ -167,10 +167,6 @@ public class AuthManager {
 
         copyIfPresent(cacheJson, initialXblSession, "_saveVersion");
         copyIfPresent(cacheJson, initialXblSession, "msaApplicationConfig");
-        // Compatibility: some minecraftauth versions read this field name when restoring StepMsaToken
-        if (!initialXblSession.has("msaCodeStep") && cacheJson.has("msaApplicationConfig")) {
-            initialXblSession.add("msaCodeStep", cacheJson.get("msaApplicationConfig").deepCopy());
-        }
 
         copyIfPresent(cacheJson, initialXblSession, "deviceType");
         copyIfPresent(cacheJson, initialXblSession, "deviceKeyPair");
@@ -180,6 +176,8 @@ public class AuthManager {
         copyIfPresent(cacheJson, initialXblSession, "xblDeviceToken");
         copyIfPresent(cacheJson, initialXblSession, "xblUserToken");
         copyIfPresent(cacheJson, initialXblSession, "xblTitleToken");
+
+        addMsaCompatibilityAliases(cacheJson, initialXblSession);
 
         normalized.add("initialXblSession", initialXblSession);
 
@@ -197,6 +195,32 @@ public class AuthManager {
 
         logger.info("Detected flat cache.json format, normalized it for auth loading");
         return normalized;
+    }
+
+
+    private void addMsaCompatibilityAliases(JsonObject cacheJson, JsonObject initialXblSession) {
+        JsonElement msaConfig = cacheJson.get("msaApplicationConfig");
+        if (msaConfig == null || msaConfig.isJsonNull()) {
+            return;
+        }
+
+        // Different minecraftauth versions expect different key names when restoring StepMsaToken/MsaCodeStep
+        String[] aliases = {"msaCodeStep", "msaCode", "stepMsaCode", "previousStep", "prevStep"};
+        for (String alias : aliases) {
+            if (!initialXblSession.has(alias)) {
+                initialXblSession.add(alias, msaConfig.deepCopy());
+            }
+        }
+
+        JsonElement msaTokenElement = initialXblSession.get("msaToken");
+        if (msaTokenElement != null && msaTokenElement.isJsonObject()) {
+            JsonObject msaToken = msaTokenElement.getAsJsonObject();
+            for (String alias : aliases) {
+                if (!msaToken.has(alias)) {
+                    msaToken.add(alias, msaConfig.deepCopy());
+                }
+            }
+        }
     }
 
     private void copyIfPresent(JsonObject from, JsonObject to, String key) {
