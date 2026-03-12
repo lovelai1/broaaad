@@ -167,6 +167,11 @@ public class AuthManager {
 
         copyIfPresent(cacheJson, initialXblSession, "_saveVersion");
         copyIfPresent(cacheJson, initialXblSession, "msaApplicationConfig");
+        // Compatibility: some minecraftauth versions read this field name when restoring StepMsaToken
+        if (!initialXblSession.has("msaCodeStep") && cacheJson.has("msaApplicationConfig")) {
+            initialXblSession.add("msaCodeStep", cacheJson.get("msaApplicationConfig").deepCopy());
+        }
+
         copyIfPresent(cacheJson, initialXblSession, "deviceType");
         copyIfPresent(cacheJson, initialXblSession, "deviceKeyPair");
         copyIfPresent(cacheJson, initialXblSession, "deviceId");
